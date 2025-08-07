@@ -54,7 +54,7 @@
     <div class="text-center max-w-md mx-auto">
         <div class="bg-white p-8 rounded-2xl shadow-2xl transition-all duration-300 transform hover:scale-105">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Scan for Attendance</h1>
-            <p class="text-gray-600 mb-6 font-medium">This QR code automatically refreshes every 10 seconds.</p>
+            <p class="text-gray-600 mb-6 font-medium">This QR code automatically refreshes every 30 seconds.</p>
             
             <!-- Container for the QR Code -->
             <div id="qrcode-container" class="mx-auto mb-6 flex items-center justify-center"></div>
@@ -62,7 +62,7 @@
             <!-- Countdown Timer -->
             <div class="bg-blue-600 text-white text-lg font-semibold px-4 py-2 rounded-lg shadow-md">
                 <span>Refreshes in: </span>
-                <span id="countdown">10</span>
+                <span id="countdown">30</span>
                 <span> seconds</span>
             </div>
         </div>
@@ -172,15 +172,21 @@
         }
 
         /**
-         * Manages the countdown timer display.
+         * Manages the countdown timer display and triggers the QR code refresh.
          */
-        function manageCountdown() {
-            // Use a setInterval to update the countdown every second
+        function manageCountdownAndRefresh() {
+            // Use a single setInterval to manage both the countdown and the refresh
             setInterval(() => {
                 // Calculate time left based on the actual system clock for accuracy
                 const secondsIntoInterval = Math.floor(Date.now() / 1000) % REFRESH_INTERVAL_SECONDS;
                 const timeLeft = REFRESH_INTERVAL_SECONDS - secondsIntoInterval;
                 countdownElement.textContent = timeLeft;
+
+                // If the timer is at its beginning (i.e., just reset to 30), refresh the QR code
+                if (timeLeft === REFRESH_INTERVAL_SECONDS) {
+                    updateQRCode();
+                }
+
             }, 1000);
         }
 
@@ -192,14 +198,11 @@
                 return;
             }
             
-            // Generate the first QR code immediately
+            // Generate the first QR code immediately on load
             updateQRCode();
 
-            // Set an interval to refresh the QR code
-            setInterval(updateQRCode, REFRESH_INTERVAL_SECONDS * 1000);
-
-            // Start the countdown timer
-            manageCountdown();
+            // Start the single timer that manages both countdown and refresh
+            manageCountdownAndRefresh();
         };
     </script>
 </body>

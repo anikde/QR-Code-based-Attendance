@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live QR Code for Attendance</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- QR Code generation library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for the QR code container */
+        #qrcode-container {
+            width: 300px;
+            height: 300px;
+        }
+        #qrcode-container > div {
+            padding: 16px; /* p-4 */
+            background-color: white;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        /* Style for the modal */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: auto;
+            padding: 20px;
+            border-radius: 1rem;
+            max-width: 80%;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center min-h-screen p-4">
+
+    <!-- Main Application Container -->
+    <div class="text-center max-w-md mx-auto">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl transition-all duration-300 transform hover:scale-105">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Scan for Attendance</h1>
+            <p class="text-gray-600 mb-6 font-medium">This QR code automatically refreshes every 10 seconds.</p>
+            
+            <!-- Container for the QR Code -->
+            <div id="qrcode-container" class="mx-auto mb-6 flex items-center justify-center"></div>
+
+            <!-- Countdown Timer -->
+            <div class="bg-blue-600 text-white text-lg font-semibold px-4 py-2 rounded-lg shadow-md">
+                <span>Refreshes in: </span>
+                <span id="countdown">10</span>
+                <span> seconds</span>
+            </div>
+        </div>
+        <p class="text-xs text-indigo-100 mt-4 font-light">Powered by client-side JavaScript and Web Crypto API.</p>
+    </div>
+
+    <!-- Custom Modal for Errors -->
+    <div id="error-modal" class="modal">
+        <div class="modal-content text-center p-8">
+            <h2 class="text-2xl font-bold text-red-600 mb-4">Error</h2>
+            <p id="error-message" class="text-gray-700 mb-6"></p>
+            <button onclick="document.getElementById('error-modal').style.display='none'" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // IMPORTANT: Update these with your Google Form's specific entry IDs.
+        const GOOGLE_FORM_PREFILLED_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeNEXN-amXfEHjZEYE414m1SjWeDKZjuMQb3qCwb9u42kjEKg/viewform?usp=pp_url&entry.542385429={token}&entry.1970215970={timestampBucket}";
+        const REFRESH_INTERVAL_SECONDS = 30;
+        const SECRET_KEY = 'secret'; // Replace this with a secure key.
+
+        // --- DOM ELEMENTS ---
+        const qrCodeContainer = document.getElementById('qrcode-container');
+        const countdownElement = document.getElementById('countdown');
+        const errorModal = document.getElementById('error-modal');
+        const errorMessageElement = document.getElementById('error-message');
+        let qrCodeInstance = null; // To hold the QRCode.js instance
+
+        /**
+         * Displays a custom error modal with a given message.
+         * @param {string} message - The error message to display.
+         */
+        function showErrorModal(message) {
+            errorMessageElement.textContent = message;
+            errorModal.style.display = 'flex'; // Use flex to center the content
+        }
+
+        /**
+         * Converts an ArrayBuffer to a hexadecimal string.
+         * @param {ArrayBuffer} buffer - The buffer to convert.
+         * @returns {string} The hexadecimal representation.
+         */
+        function bufferToHex(buffer) {
+            return [...new Uint8Array(buffer)]
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+
+        /**
+         * Generates a time-based token using SHA-256.
+         * This function requires a modern browser with the Web Crypto API.
+         * @param {number} timestampBucket - The time bucket to generate a token for.
+         * @returns {Promise<string>} A promise that resolves to the 10-character token.
+         */
+        async function generateToken(timestampBucket) {
+            try {
+                // Combine the secret key and the timestamp bucket
+                const dataToHash = `${SECRET_KEY}-${timestampBucket}`;
+                const encoder = new TextEncoder();
+                const data = encoder.encode(dataToHash);
+                
+                // Use the Web Crypto API to create a SHA-256 hash
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashHex = bufferToHex(hashBuffer);
+
+                // Return the first 10 characters as the token
+                return hashHex.substring(0, 10);
+            } catch (error) {
+                console.error("Error generating token:", error);
+                showErrorModal("Error: Could not generate a secure token. Please ensure your browser supports the Web Crypto API.");
+                return null;
+            }
+        }
+
+        /**
+         * Generates a new QR code based on the current time-based token and timestamp bucket.
+         */
+        async function updateQRCode() {
+            // 1. Calculate the current time bucket based on the refresh interval
+            const timestampBucket = Math.floor(Date.now() / 1000 / REFRESH_INTERVAL_SECONDS);
+
+            // 2. Generate the token using the secret key and this bucket
+            const token = await generateToken(timestampBucket);
+            if (!token) return; // Stop if token generation failed
+
+            // 3. Create the final URL with both the token and the timestamp bucket
+            const url = GOOGLE_FORM_PREFILLED_URL
+                .replace("{token}", token)
+                .replace("{timestampBucket}", timestampBucket);
+
+            // Clear the previous QR code to prevent duplication
+            qrCodeContainer.innerHTML = ''; 
+
+            // Create a new QR code instance
+            // The dimensions are calculated to fit the 300px container with padding.
+            qrCodeInstance = new QRCode(qrCodeContainer, {
+                text: url,
+                width: 268,
+                height: 268,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H // High correction level for reliability
+            });
+        }
+
+        /**
+         * Manages the countdown timer display.
+         */
+        function manageCountdown() {
+            // Use a setInterval to update the countdown every second
+            setInterval(() => {
+                // Calculate time left based on the actual system clock for accuracy
+                const secondsIntoInterval = Math.floor(Date.now() / 1000) % REFRESH_INTERVAL_SECONDS;
+                const timeLeft = REFRESH_INTERVAL_SECONDS - secondsIntoInterval;
+                countdownElement.textContent = timeLeft;
+            }, 1000);
+        }
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            // Check for Web Crypto API support, which is essential for this code
+            if (!window.crypto || !window.crypto.subtle) {
+                showErrorModal("Error: Web Crypto API is not supported in this browser. Please use a modern browser like Chrome, Firefox, or Safari.");
+                return;
+            }
+            
+            // Generate the first QR code immediately
+            updateQRCode();
+
+            // Set an interval to refresh the QR code
+            setInterval(updateQRCode, REFRESH_INTERVAL_SECONDS * 1000);
+
+            // Start the countdown timer
+            manageCountdown();
+        };
+    </script>
+</body>
+</html>

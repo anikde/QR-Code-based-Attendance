@@ -1,11 +1,13 @@
 // --- CONFIGURATION ---
 // IMPORTANT: These values MUST EXACTLY MATCH the values in your HTML file.
 const SECRET_KEY = 'secret'; // Replace this with a secure key.
-const REFRESH_INTERVAL_SECONDS = 30;
+const REFRESH_INTERVAL_SECONDS = 30; // Updated to match the HTML file.
 // These are the Google Form question titles for the token and timestamp bucket.
 // They are more reliable for use with e.namedValues.
 const TOKEN_QUESTION_TITLE = 'Token';
 const TIMESTAMP_BUCKET_TITLE = 'TimestampBucket';
+const EMAIL_QUESTION_TITLE = 'Email Address'; // New constant for the email field.
+const EMAIL_SUBJECT = 'Attendance Submission Status CSL3040'; // New constant for the email subject line.
 
 
 /**
@@ -30,7 +32,8 @@ function onFormSubmit(e) {
     validationColumnIndex = headers.indexOf("Validation Status") + 1;
   }
   
-  // Get the token that was submitted with the form using its question title
+  // Get the email and submitted token from the form response
+  const userEmail = e.namedValues[EMAIL_QUESTION_TITLE] ? e.namedValues[EMAIL_QUESTION_TITLE][0] : null;
   const submittedToken = e.namedValues[TOKEN_QUESTION_TITLE] ? e.namedValues[TOKEN_QUESTION_TITLE][0] : null;
   
   if (!submittedToken) {
@@ -51,15 +54,31 @@ function onFormSubmit(e) {
   const previousToken = generateTokenForTime(previousIntervalTime);
 
   let validationResult = "INVALID";
+  let emailBody = "Your attendance submission was invalid. Please ensure you scan the most recent QR code and try again.";
+  
   // Check if the submitted token matches either the current or previous valid token
   if (submittedToken === currentToken || submittedToken === previousToken) {
     validationResult = "VALID";
+    emailBody = "Your attendance submission was successful. Thank you!";
   }
   
   // Write the result to the "Validation Status" column for the newly submitted row
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow, validationColumnIndex).setValue(validationResult);
   Logger.log(`Submitted Token: ${submittedToken}, Valid Tokens: [${currentToken}, ${previousToken}], Result: ${validationResult}`);
+
+  // --- Email Notification Logic ---
+  // Check if a valid email was provided before attempting to send
+  if (userEmail) {
+    try {
+      MailApp.sendEmail(userEmail, EMAIL_SUBJECT, emailBody);
+      Logger.log(`Email sent to ${userEmail} with status: ${validationResult}`);
+    } catch (error) {
+      Logger.log(`Error sending email to ${userEmail}: ${error.message}`);
+    }
+  } else {
+    Logger.log("No email address provided to send a notification.");
+  }
 }
 
 /**

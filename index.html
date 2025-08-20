@@ -54,7 +54,8 @@
     <div class="text-center max-w-md mx-auto">
         <div class="bg-white p-8 rounded-2xl shadow-2xl transition-all duration-300 transform hover:scale-105">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Scan for Attendance</h1>
-            <p class="text-gray-600 mb-6 font-medium">This QR code automatically refreshes every 30 seconds.</p>
+            <!-- The refresh time is now dynamically set by the JavaScript below. -->
+            <p id="refresh-text" class="text-gray-600 mb-6 font-medium"></p>
             
             <!-- Container for the QR Code -->
             <div id="qrcode-container" class="mx-auto mb-6 flex items-center justify-center"></div>
@@ -62,7 +63,8 @@
             <!-- Countdown Timer -->
             <div class="bg-blue-600 text-white text-lg font-semibold px-4 py-2 rounded-lg shadow-md">
                 <span>Refreshes in: </span>
-                <span id="countdown">30</span>
+                <!-- The countdown is dynamically set by the JavaScript. -->
+                <span id="countdown"></span>
                 <span> seconds</span>
             </div>
         </div>
@@ -82,14 +84,19 @@
 
     <script>
         // --- CONFIGURATION ---
-        // IMPORTANT: Update these with your Google Form's specific entry IDs.
-        const GOOGLE_FORM_PREFILLED_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeNEXN-amXfEHjZEYE414m1SjWeDKZjuMQb3qCwb9u42kjEKg/viewform?usp=pp_url&entry.542385429={token}&entry.1970215970={timestampBucket}";
+        // IMPORTANT: Update this with your Google Form's new single entry ID.
+        // It should contain a single short answer field to capture the combined token.
+        // Get this URL by creating a new single short answer field in your form and generating a pre-filled link.
+        const GOOGLE_FORM_PREFILLED_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeNEXN-amXfEHjZEYE414m1SjWeDKZjuMQb3qCwb9u42kjEKg/viewform?usp=pp_url&entry.1970215970={combinedToken}";
+        // This is the ONE variable that controls the refresh interval.
         const REFRESH_INTERVAL_SECONDS = 30;
         const SECRET_KEY = 'secret'; // Replace this with a secure key.
 
         // --- DOM ELEMENTS ---
         const qrCodeContainer = document.getElementById('qrcode-container');
         const countdownElement = document.getElementById('countdown');
+        // Get the new paragraph element for the refresh text.
+        const refreshTextElement = document.getElementById('refresh-text');
         const errorModal = document.getElementById('error-modal');
         const errorMessageElement = document.getElementById('error-message');
         let qrCodeInstance = null; // To hold the QRCode.js instance
@@ -151,10 +158,12 @@
             const token = await generateToken(timestampBucket);
             if (!token) return; // Stop if token generation failed
 
-            // 3. Create the final URL with both the token and the timestamp bucket
+            // 3. Combine the token and timestamp bucket into a single string.
+            const combinedToken = `${token}-${timestampBucket}`;
+
+            // 4. Create the final URL with the single combined token
             const url = GOOGLE_FORM_PREFILLED_URL
-                .replace("{token}", token)
-                .replace("{timestampBucket}", timestampBucket);
+                .replace("{combinedToken}", combinedToken);
 
             // Clear the previous QR code to prevent duplication
             qrCodeContainer.innerHTML = ''; 
@@ -182,7 +191,7 @@
                 const timeLeft = REFRESH_INTERVAL_SECONDS - secondsIntoInterval;
                 countdownElement.textContent = timeLeft;
 
-                // If the timer is at its beginning (i.e., just reset to 30), refresh the QR code
+                // If the timer is at its beginning (i.e., just reset to the interval), refresh the QR code
                 if (timeLeft === REFRESH_INTERVAL_SECONDS) {
                     updateQRCode();
                 }
@@ -198,6 +207,10 @@
                 return;
             }
             
+            // Set the dynamic text and the initial countdown value from the single variable.
+            refreshTextElement.textContent = `This QR code automatically refreshes every ${REFRESH_INTERVAL_SECONDS} seconds.`;
+            countdownElement.textContent = REFRESH_INTERVAL_SECONDS;
+
             // Generate the first QR code immediately on load
             updateQRCode();
 

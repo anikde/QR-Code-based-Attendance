@@ -45,35 +45,15 @@ function onFormSubmit(e) {
       validationColumnIndex = headers.indexOf("Validation Status") + 1;
     }
     
+    const lastRow = sheet.getLastRow();
+    
     const userEmail = e.namedValues[EMAIL_QUESTION_TITLE] ? e.namedValues[EMAIL_QUESTION_TITLE][0] : null;
     const combinedToken = e.namedValues[SINGLE_TOKEN_QUESTION_TITLE] ? e.namedValues[SINGLE_TOKEN_QUESTION_TITLE][0] : null;
-    
-    // Determine the target row for validation.
-    // Default to the last row, which is the new submission.
-    let targetRow = sheet.getLastRow();
-
-    // If an email address is provided, check if the user has already submitted.
-    if (userEmail) {
-      // Get all emails from the sheet
-      const emailColumnIndex = headers.indexOf(EMAIL_QUESTION_TITLE) + 1;
-      if (emailColumnIndex > 0) {
-        const emailList = sheet.getRange(2, emailColumnIndex, sheet.getLastRow() - 1, 1).getValues();
-        // Search for the user's email address
-        for (let i = 0; i < emailList.length; i++) {
-          if (emailList[i][0] === userEmail) {
-            // Found a match, set the target row to the existing row
-            targetRow = i + 2; // +2 to account for 0-based index and header row
-            Logger.log(`Found existing email for user ${userEmail} at row ${targetRow}.`);
-            break; 
-          }
-        }
-      }
-    }
 
 
     if (!combinedToken) {
       // If the combined token is missing, log an error and mark as INVALID.
-      sheet.getRange(targetRow, validationColumnIndex).setValue("INVALID");
+      sheet.getRange(lastRow, validationColumnIndex).setValue("INVALID");
       Logger.log("Error: Could not find submitted combined token. Check if SINGLE_TOKEN_QUESTION_TITLE is correct.");
       return;
     }
@@ -82,7 +62,7 @@ function onFormSubmit(e) {
     const parts = combinedToken.split('-');
     if (parts.length !== 2) {
       // If the token is not in the correct format, mark as INVALID.
-      sheet.getRange(targetRow, validationColumnIndex).setValue("INVALID");
+      sheet.getRange(lastRow, validationColumnIndex).setValue("INVALID");
       Logger.log("Error: Invalid combined token format.");
       return;
     }
@@ -113,7 +93,7 @@ function onFormSubmit(e) {
     }
     
     // Write the result to the "Validation Status" column for the determined target row
-    sheet.getRange(targetRow, validationColumnIndex).setValue(validationResult);
+    sheet.getRange(lastRow, validationColumnIndex).setValue(validationResult);
     Logger.log(`Submitted Token: ${submittedToken}, Valid Tokens: [${currentToken}, ${previousToken}], Result: ${validationResult}`);
 
     // --- Email Notification Logic ---
